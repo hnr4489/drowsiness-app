@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Dashcam - Dashboard</title>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function() {
+            emailjs.init("OZNLclrooFqNEEqWR"); 
+        })();
+    </script>
+    <style>
+        body { background-color: #0f111a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+        .dashboard-container { max-width: 1000px; margin: auto; text-align: center; }
+        .camera-box { width: 100%; height: 400px; background: black; border: 2px solid lime; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .alert-panel { background: #1e2126; padding: 20px; border-radius: 10px; border: 1px solid #333; }
+        .btn-test { background: orange; color: black; border: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h1>🚗 AI Dashcam Monitor</h1>
+        <div class="camera-box">
+            <p>Camera Interface Ready</p>
+        </div>
+        <div class="alert-panel">
+            <h3>System Status: <span style="color: lime;">ONLINE</span></h3>
+            <button class="btn-test" onclick="sendAlert()">Test Emergency Alert Email</button>
+        </div>
+    </div>
+
+    <script>
+        function sendAlert() {
+            const templateParams = {
+                to_email: document.referrer ? "driver_logged_in@example.com" : "admin@example.com", 
+                otp: "DROWSINESS DETECTED!" 
+            };
+
+            emailjs.send('service_i0v4u5c', 'template_i0kie3b', templateParams)
+                .then(() => alert("Emergency Alert Sent!"))
+                .catch((err) => console.error("Alert failed", err));
+        }
+    </script>
+</body>
+</html>
