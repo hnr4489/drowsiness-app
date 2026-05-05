@@ -3,187 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drowsiness Detector - Pro Mobile</title>
-    
-    <!-- SDKs -->
+    <title>Secure OTP Login - AI Dashcam</title>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script>emailjs.init("OZNLclrooFqNEEqWR");</script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
+    <script>
+        (function() { emailjs.init("OZNLclrooFqNEEqWR"); })();
+    </script>
     <style>
-        :root { --neon-lime: #32ff7e; --neon-red: #ff4d4d; --glass: rgba(255, 255, 255, 0.1); }
-        body { 
-            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
-            color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px;
-            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
-            overflow-x: hidden;
-        }
-        .dashboard {
-            background: var(--glass); backdrop-filter: blur(15px);
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
-            padding: 20px; width: 100%; max-width: 600px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            box-sizing: border-box;
-        }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .main-view { position: relative; border-radius: 15px; overflow: hidden; border: 2px solid var(--neon-lime); background: #000; width: 100%; min-height: 240px; }
-        .main-view.danger { border-color: var(--neon-red); box-shadow: 0 0 30px var(--neon-red); }
-        video { width: 100%; height: auto; display: block; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .reaction-emoji {
-            position: absolute; top: 10px; right: 10px; font-size: 2.5rem;
-            background: rgba(0,0,0,0.6); border-radius: 50%; width: 60px; height: 60px;
-            display: flex; align-items: center; justify-content: center; z-index: 10;
-        }
-        .stats-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .stat-card { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 12px; text-align: center; }
-        .status-text { font-size: 1.1rem; font-weight: bold; color: var(--neon-lime); text-transform: uppercase; }
-        .danger-text { color: var(--neon-red) !important; animation: blink 0.6s infinite; }
-        button { 
-            background: none; border: 1px solid cyan; color: cyan; 
-            padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: bold;
-        }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+        body { background: #121212; color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #1e2126; padding: 40px; border-radius: 12px; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); text-align: center; width: 350px; border: 1px solid #333; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #444; border-radius: 5px; background: #2a2d35; color: white; }
+        button { width: 100%; padding: 12px; background: lime; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        #error-msg, #success-msg { display: none; margin-top: 15px; font-size: 0.9rem; padding: 10px; border-radius: 5px; }
+        #error-msg { color: #ff4c4c; background: rgba(255, 76, 76, 0.1); border: 1px solid #ff4c4c; }
+        #success-msg { color: lime; background: rgba(0, 255, 0, 0.1); border: 1px solid lime; }
     </style>
 </head>
 <body>
-
-    <div class="dashboard">
-        <div class="header">
-            <h3 style="margin:0; letter-spacing: 1px;">🚗 DROWSINESS <span style="color:cyan">DETECTOR</span></h3>
-            <div style="display:flex; gap:5px;">
-                <button onclick="togglePiP()">🔲 PiP</button>
-                <button onclick="logout()" style="border-color:#ff4d4d; color:#ff4d4d;">LOGOUT</button>
-            </div>
+    <div class="login-box">
+        <h2>🚗 AI Dashcam Login</h2>
+        <div id="email-section">
+            <input type="email" id="email" placeholder="Enter your Email" required>
+            <button onclick="sendOTP()" id="send-btn">Send OTP</button>
         </div>
-
-        <div class="main-view" id="camera-frame">
-            <video id="webcam" autoplay muted playsinline></video>
-            <canvas id="output_canvas"></canvas>
-            <div class="reaction-emoji" id="emoji-display">🟢</div>
+        <div id="otp-section" style="display:none;">
+            <p style="color: #aaa; font-size: 0.8rem;">Check your inbox for the OTP.</p>
+            <input type="text" id="otp-input" placeholder="6-digit code" maxlength="6">
+            <button onclick="verifyOTP()">Verify & Login</button>
         </div>
-
-        <div class="stats-panel">
-            <div class="stat-card">
-                <div style="font-size: 0.7rem; color: #aaa;">STATUS</div>
-                <div class="status-text" id="status-text">WAITING...</div>
-            </div>
-            <div class="stat-card">
-                <div style="font-size: 0.7rem; color: #aaa;">EAR SCORE</div>
-                <div id="ear-val" style="font-size: 1.2rem; font-weight: bold; color: cyan;">0.000</div>
-            </div>
-        </div>
+        <p id="error-msg"></p>
+        <p id="success-msg"></p>
     </div>
 
-    <audio id="short-beep" preload="auto"><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg"></audio>
-    <audio id="critical-alarm" preload="auto" loop><source src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3" type="audio/mpeg"></audio>
-
     <script>
-        if (localStorage.getItem("isLoggedIn") !== "true") window.location.href = "index.html";
-
-        const video = document.getElementById('webcam');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const earVal = document.getElementById('ear-val');
-        const emojiDisp = document.getElementById('emoji-display');
-        const cameraFrame = document.getElementById('camera-frame');
-        const shortBeep = document.getElementById('short-beep');
-        const criticalAlarm = document.getElementById('critical-alarm');
-
-        const EAR_THRESHOLD = 0.18; 
-        const CRITICAL_TIME = 5000; 
-        let eyesClosedStartTime = null;
-        let isEmailSent = false;
-        let audioCtx = null;
-        let wakeLock = null;
-
-        const initAudio = () => {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            shortBeep.play().then(() => { shortBeep.pause(); shortBeep.currentTime = 0; });
-        };
-
-        const requestWakeLock = async () => {
-            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
-            catch (e) { console.warn("WakeLock blocked"); }
-        };
-
-        async function togglePiP() {
-            try { await video.requestPictureInPicture(); } catch (e) { alert("PiP not supported or video not ready."); }
+        let generatedOTP = "";
+        function sendOTP() {
+            const email = document.getElementById("email").value;
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("Invalid Email"); return; }
+            generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+            document.getElementById("send-btn").innerText = "Sending...";
+            emailjs.send('service_i0v4u5c', 'template_i0kie3b', { to_email: email, otp: generatedOTP })
+                .then(() => {
+                    document.getElementById("email-section").style.display = "none";
+                    document.getElementById("otp-section").style.display = "block";
+                    document.getElementById("success-msg").innerText = "✅ OTP Sent!";
+                    document.getElementById("success-msg").style.display = "block";
+                });
         }
-
-        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        faceMesh.onResults(onResults);
-
-        function getEAR(landmarks, i) {
-            const v1 = Math.hypot(landmarks[i[1]].x - landmarks[i[5]].x, landmarks[i[1]].y - landmarks[i[5]].y);
-            const v2 = Math.hypot(landmarks[i[2]].x - landmarks[i[4]].x, landmarks[i[2]].y - landmarks[i[4]].y);
-            const h = Math.hypot(landmarks[i[0]].x - landmarks[i[3]].x, landmarks[i[0]].y - landmarks[i[3]].y);
-            return (v1 + v2) / (2.0 * h);
+        function verifyOTP() {
+            if (document.getElementById("otp-input").value === generatedOTP) {
+                localStorage.setItem("isLoggedIn", "true");
+                window.location.href = "app.html";
+            } else { alert("Wrong OTP"); }
         }
-
-        function onResults(results) {
-            canvasElement.width = video.videoWidth;
-            canvasElement.height = video.videoHeight;
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                const landmarks = results.multiFaceLandmarks[0];
-                const avgEAR = (getEAR(landmarks, [33, 160, 158, 133, 153, 144]) + getEAR(landmarks, [362, 385, 387, 263, 373, 380])) / 2;
-                earVal.innerText = avgEAR.toFixed(3);
-
-                if (avgEAR < EAR_THRESHOLD) {
-                    if (!eyesClosedStartTime) eyesClosedStartTime = performance.now();
-                    const duration = performance.now() - eyesClosedStartTime;
-                    
-                    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-
-                    emojiDisp.innerText = "😴";
-                    statusText.innerText = "CLOSED";
-                    statusText.classList.add('danger-text');
-                    cameraFrame.classList.add('danger');
-
-                    if (duration > 1000 && duration < CRITICAL_TIME) {
-                        if (shortBeep.paused) shortBeep.play().catch(()=>{});
-                    } else if (duration >= CRITICAL_TIME) {
-                        emojiDisp.innerText = "🚨";
-                        statusText.innerText = "WAKE UP!";
-                        if (criticalAlarm.paused) criticalAlarm.play().catch(()=>{});
-                        if (!isEmailSent) { sendEmail(); isEmailSent = true; }
-                    }
-                } else {
-                    eyesClosedStartTime = null; isEmailSent = false;
-                    emojiDisp.innerText = "😊"; statusText.innerText = "ACTIVE";
-                    statusText.classList.remove('danger-text'); cameraFrame.classList.remove('danger');
-                    criticalAlarm.pause(); criticalAlarm.currentTime = 0;
-                }
-            }
-        }
-
-        function sendEmail() {
-            emailjs.send('service_i0v4u5c', 'template_i0kie3b', {
-                to_email: "harshareddy4489@gmail.com",
-                otp: "DROWSINESS ALERT: Driver detected asleep for 5 seconds!"
-            });
-        }
-
-        async function init() {
-            window.addEventListener('touchstart', initAudio, { once: true });
-            window.addEventListener('click', initAudio, { once: true });
-            
-            requestWakeLock();
-            const cam = new Camera(video, {
-                onFrame: async () => { await faceMesh.send({image: video}); },
-                width: 640, height: 480
-            });
-            cam.start();
-        }
-
-        function logout() { localStorage.removeItem("isLoggedIn"); window.location.href = "index.html"; }
-        window.onload = init;
-        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') requestWakeLock(); });
     </script>
 </body>
 </html>
