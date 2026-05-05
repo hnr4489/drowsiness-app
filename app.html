@@ -3,58 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure OTP Login - AI Dashcam</title>
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <title>Drowsiness Detector Pro</title>
+    
+    <!-- Security Check (MUST BE FIRST) -->
     <script>
-        (function() { emailjs.init("OZNLclrooFqNEEqWR"); })();
+        if (sessionStorage.getItem("DASHCAM_AUTH_STATUS") !== "PERMITTED") {
+            window.location.replace("index.html");
+        }
     </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script>emailjs.init("OZNLclrooFqNEEqWR");</script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
     <style>
-        body { background: #121212; color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-box { background: #1e2126; padding: 40px; border-radius: 12px; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); text-align: center; width: 350px; border: 1px solid #333; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #444; border-radius: 5px; background: #2a2d35; color: white; }
-        button { width: 100%; padding: 12px; background: lime; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        #error-msg, #success-msg { display: none; margin-top: 15px; font-size: 0.9rem; padding: 10px; border-radius: 5px; }
-        #error-msg { color: #ff4c4c; background: rgba(255, 76, 76, 0.1); border: 1px solid #ff4c4c; }
-        #success-msg { color: lime; background: rgba(0, 255, 0, 0.1); border: 1px solid lime; }
+        :root { --neon-lime: #32ff7e; --neon-red: #ff4d4d; }
+        body { background: #0f0f1a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .dashboard { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border-radius: 20px; padding: 20px; width: 100%; max-width: 600px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+        .camera-view { position: relative; border-radius: 15px; overflow: hidden; border: 2px solid var(--neon-lime); background: #000; margin-top: 15px; }
+        .camera-view.danger { border-color: var(--neon-red); box-shadow: 0 0 20px var(--neon-red); }
+        video { width: 100%; display: block; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .status { font-size: 1.2rem; font-weight: bold; color: var(--neon-lime); margin-top: 15px; text-transform: uppercase; }
+        .status.blink { animation: blinker 0.6s infinite; color: var(--neon-red); }
+        @keyframes blinker { 50% { opacity: 0; } }
+        button { background: none; border: 1px solid cyan; color: cyan; padding: 8px 15px; border-radius: 8px; cursor: pointer; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="login-box">
-        <h2>🚗 AI Dashcam Login</h2>
-        <div id="email-section">
-            <input type="email" id="email" placeholder="Enter your Email" required>
-            <button onclick="sendOTP()" id="send-btn">Send OTP</button>
+
+    <div class="dashboard">
+        <div style="display:flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin:0;">DROWSINESS DETECTOR</h3>
+            <button onclick="logout()" style="border-color:#ff4d4d; color:#ff4d4d;">LOGOUT</button>
         </div>
-        <div id="otp-section" style="display:none;">
-            <p style="color: #aaa; font-size: 0.8rem;">Check your inbox for the OTP.</p>
-            <input type="text" id="otp-input" placeholder="6-digit code" maxlength="6">
-            <button onclick="verifyOTP()">Verify & Login</button>
+
+        <div class="camera-view" id="camera-frame">
+            <video id="webcam" autoplay muted playsinline></video>
+            <canvas id="output_canvas"></canvas>
         </div>
-        <p id="error-msg"></p>
-        <p id="success-msg"></p>
+
+        <div id="status-text" class="status">SYSTEM ACTIVE</div>
+        <div id="ear-val" style="color:#888; font-size: 0.8rem; margin-top: 5px;">EAR: 0.000</div>
+        
+        <button onclick="video.requestPictureInPicture()" style="margin-top:20px;">🔲 START BACKGROUND MODE</button>
     </div>
 
+    <!-- Alarm Files -->
+    <audio id="short-beep"><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+    <audio id="long-alarm" loop><source src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
+
     <script>
-        let generatedOTP = "";
-        function sendOTP() {
-            const email = document.getElementById("email").value;
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("Invalid Email"); return; }
-            generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-            document.getElementById("send-btn").innerText = "Sending...";
-            emailjs.send('service_i0v4u5c', 'template_i0kie3b', { to_email: email, otp: generatedOTP })
-                .then(() => {
-                    document.getElementById("email-section").style.display = "none";
-                    document.getElementById("otp-section").style.display = "block";
-                    document.getElementById("success-msg").innerText = "✅ OTP Sent!";
-                    document.getElementById("success-msg").style.display = "block";
-                });
+        const video = document.getElementById('webcam');
+        const statusText = document.getElementById('status-text');
+        const earDisplay = document.getElementById('ear-val');
+        const shortBeep = document.getElementById('short-beep');
+        const longAlarm = document.getElementById('long-alarm');
+        const frame = document.getElementById('camera-frame');
+
+        let eyesClosedTime = null;
+        let emailSent = false;
+        let audioCtx = null;
+
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
+        faceMesh.onResults(onResults);
+
+        function getEAR(landmarks, i) {
+            const v = Math.hypot(landmarks[i[1]].x - landmarks[i[5]].x, landmarks[i[1]].y - landmarks[i[5]].y);
+            const h = Math.hypot(landmarks[i[0]].x - landmarks[i[3]].x, landmarks[i[0]].y - landmarks[i[3]].y);
+            return v / h;
         }
-        function verifyOTP() {
-            if (document.getElementById("otp-input").value === generatedOTP) {
-                localStorage.setItem("isLoggedIn", "true");
-                window.location.href = "app.html";
-            } else { alert("Wrong OTP"); }
+
+        function onResults(results) {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                const ear = (getEAR(landmarks, [33, 160, 158, 133, 153, 144]) + getEAR(landmarks, [362, 385, 387, 263, 373, 380])) / 2;
+                earDisplay.innerText = `EAR: ${ear.toFixed(3)}`;
+
+                if (ear < 0.18) {
+                    if (!eyesClosedTime) eyesClosedTime = Date.now();
+                    const duration = Date.now() - eyesClosedTime;
+
+                    statusText.innerText = "⚠️ EYES CLOSED!";
+                    statusText.classList.add('blink');
+                    frame.classList.add('danger');
+
+                    if (duration > 1000 && duration < 10000) shortBeep.play().catch(()=>{});
+                    if (duration >= 10000) {
+                        longAlarm.play().catch(()=>{});
+                        if (!emailSent) {
+                            emailjs.send('service_i0v4u5c', 'template_i0kie3b', { to_email: "harshareddy4489@gmail.com", otp: "CRITICAL: Eyes closed for 10 seconds!" });
+                            emailSent = true;
+                        }
+                    }
+                } else {
+                    eyesClosedTime = null; emailSent = false;
+                    statusText.innerText = "SYSTEM ACTIVE";
+                    statusText.classList.remove('blink');
+                    frame.classList.remove('danger');
+                    longAlarm.pause(); longAlarm.currentTime = 0;
+                }
+            }
         }
+
+        async function init() {
+            window.addEventListener('click', () => { 
+                if(!audioCtx) audioCtx = new AudioContext();
+                shortBeep.play().then(() => { shortBeep.pause(); });
+            }, {once: true});
+
+            const cam = new Camera(video, {
+                onFrame: async () => { await faceMesh.send({image: video}); },
+                width: 640, height: 480
+            });
+            cam.start();
+        }
+
+        function logout() {
+            sessionStorage.removeItem("DASHCAM_AUTH_STATUS");
+            window.location.replace("index.html");
+        }
+
+        window.onload = init;
     </script>
 </body>
 </html>
