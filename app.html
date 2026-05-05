@@ -3,101 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Dashcam - Monitoring</title>
+    <title>AI Dashcam - NeoMonitor</title>
     
-    <!-- EmailJS SDK -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script type="text/javascript">
-        (function() {
-            emailjs.init("OZNLclrooFqNEEqWR"); 
-        })();
-    </script>
-    
-    <!-- MediaPipe Face Mesh AI Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <!-- EmailJS & MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script>emailjs.init("OZNLclrooFqNEEqWR");</script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <style>
-        body { background-color: #0f111a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .camera-container { width: 100%; max-width: 800px; aspect-ratio: 4/3; background: black; border: 3px solid lime; border-radius: 15px; overflow: hidden; position: relative; }
-        video { width: 100%; height: 100%; object-fit: cover; }
+        :root { --neon-lime: #32ff7e; --neon-red: #ff4d4d; --glass: rgba(255, 255, 255, 0.1); }
+        
+        body { 
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+            color: white; font-family: 'Outfit', sans-serif; margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+
+        .dashboard {
+            background: var(--glass); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 24px;
+            padding: 30px; width: 90%; max-width: 900px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        
+        .main-view { position: relative; border-radius: 20px; overflow: hidden; border: 2px solid var(--neon-lime); transition: 0.3s; }
+        .main-view.danger { border-color: var(--neon-red); box-shadow: 0 0 30px var(--neon-red); }
+
+        video { width: 100%; height: auto; display: block; filter: contrast(1.1); }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .controls { margin-top: 20px; width: 100%; max-width: 400px; background: #1e2126; padding: 20px; border-radius: 10px; text-align: center; }
-        .status { color: lime; font-weight: bold; margin-bottom: 10px; display: block; font-size: 1.2rem; }
-        .status.alarm { color: #ff4c4c; animation: blinker 1s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0; } }
+
+        .reaction-emoji {
+            position: absolute; top: 20px; right: 20px; font-size: 3rem;
+            background: rgba(0,0,0,0.5); border-radius: 50%; width: 80px; height: 80px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .stats-panel {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 15px; text-align: center;
+        }
+
+        .status-text { font-size: 1.5rem; font-weight: bold; color: var(--neon-lime); text-transform: uppercase; }
+        .danger-text { color: var(--neon-red) !important; animation: pulse 0.5s infinite; }
+
+        button { 
+            background: transparent; border: 1px solid #444; color: white; 
+            padding: 10px 20px; border-radius: 10px; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background: #ff4d4d; border-color: #ff4d4d; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h2>🚗 AI Dashcam Monitor</h2>
-        <button onclick="logout()" style="background:none; border:1px solid #444; color:white; padding:5px 10px; border-radius:5px; cursor:pointer;">Logout</button>
+    <div class="dashboard">
+        <div class="header">
+            <h2 style="margin:0;">🚗 AI NEO-DASH</h2>
+            <button onclick="logout()">LOGOUT</button>
+        </div>
+
+        <div class="main-view" id="camera-frame">
+            <video id="webcam" autoplay muted playsinline></video>
+            <canvas id="output_canvas"></canvas>
+            <div class="reaction-emoji" id="emoji-display">🟢</div>
+        </div>
+
+        <div class="stats-panel">
+            <div class="stat-card">
+                <div style="font-size: 0.8rem; color: #888;">AI STATUS</div>
+                <div class="status-text" id="status-text">INITIALIZING</div>
+            </div>
+            <div class="stat-card">
+                <div style="font-size: 0.8rem; color: #888;">EYE ASPECT RATIO (EAR)</div>
+                <div id="ear-val" style="font-size: 1.5rem; font-weight: bold;">0.00</div>
+            </div>
+        </div>
     </div>
 
-    <div class="camera-container">
-        <video id="webcam" autoplay muted playsinline></video>
-        <canvas id="output_canvas"></canvas> 
-    </div>
-
-    <div class="controls">
-        <span class="status" id="status-text">SYSTEM: INITIALIZING AI...</span>
-        <div id="ear-debug" style="font-family: monospace; color: #888; font-size: 0.8rem;">EAR: 0.00</div>
-    </div>
-
-    <!-- Alarm Sound -->
-    <audio id="alarm-sound" loop>
-        <source src="https://cdn.pixabay.com/audio/2022/03/19/audio_107038e211.mp3" type="audio/mpeg">
-    </audio>
+    <!-- Audio Alerts -->
+    <audio id="short-beep"><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg"></audio>
+    <audio id="critical-alarm" loop><source src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3" type="audio/mpeg"></audio>
 
     <script>
-        // --- 1. Auth Guard ---
-        if (localStorage.getItem("isLoggedIn") !== "true") {
-            window.location.href = "index.html";
-        }
-
         const video = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
         const statusText = document.getElementById('status-text');
-        const alarmSound = document.getElementById('alarm-sound');
-        const earDisplay = document.getElementById('ear-debug');
+        const earVal = document.getElementById('ear-val');
+        const emojiDisp = document.getElementById('emoji-display');
+        const cameraFrame = document.getElementById('camera-frame');
+        const shortBeep = document.getElementById('short-beep');
+        const criticalAlarm = document.getElementById('critical-alarm');
 
-        // --- 2. Calibration Settings ---
-        const EAR_THRESHOLD = 0.18; // Lowered to avoid false positives
-        const TIME_BEFORE_EMAIL = 3000; // 3 seconds in milliseconds
-        
+        const EAR_THRESHOLD = 0.19; 
+        const CRITICAL_TIME = 5000; // 5 Seconds
         let eyesClosedStartTime = null;
         let isEmailSent = false;
-        let camera = null;
 
-        // --- 3. MediaPipe Setup ---
-        const faceMesh = new FaceMesh({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-        }});
-
-        faceMesh.setOptions({
-            maxNumFaces: 1,
-            refineLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         faceMesh.onResults(onResults);
 
-        function getEAR(landmarks, indices) {
-            const p1 = landmarks[indices[0]]; // Left Corner
-            const p2 = landmarks[indices[1]]; // Top 1
-            const p3 = landmarks[indices[2]]; // Top 2
-            const p4 = landmarks[indices[3]]; // Right Corner
-            const p5 = landmarks[indices[4]]; // Bottom 1
-            const p6 = landmarks[indices[5]]; // Bottom 2
-
-            const v1 = Math.hypot(p2.x - p6.x, p2.y - p6.y);
-            const v2 = Math.hypot(p3.x - p5.x, p3.y - p5.y);
-            const h = Math.hypot(p1.x - p4.x, p1.y - p4.y);
-
+        function getEAR(landmarks, i) {
+            const v1 = Math.hypot(landmarks[i[1]].x - landmarks[i[5]].x, landmarks[i[1]].y - landmarks[i[5]].y);
+            const v2 = Math.hypot(landmarks[i[2]].x - landmarks[i[4]].x, landmarks[i[2]].y - landmarks[i[4]].y);
+            const h = Math.hypot(landmarks[i[0]].x - landmarks[i[3]].x, landmarks[i[0]].y - landmarks[i[3]].y);
             return (v1 + v2) / (2.0 * h);
         }
 
@@ -108,47 +125,50 @@
 
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
+                const avgEAR = (getEAR(landmarks, [33, 160, 158, 133, 153, 144]) + getEAR(landmarks, [362, 385, 387, 263, 373, 380])) / 2;
                 
-                // Detailed landmark indices for eyes
-                const earL = getEAR(landmarks, [33, 160, 158, 133, 153, 144]);
-                const earR = getEAR(landmarks, [362, 385, 387, 263, 373, 380]);
-                const avgEAR = (earL + earR) / 2;
-
-                earDisplay.innerText = `EAR: ${avgEAR.toFixed(3)}`;
+                earVal.innerText = avgEAR.toFixed(3);
 
                 if (avgEAR < EAR_THRESHOLD) {
-                    // EYES CLOSED
                     if (!eyesClosedStartTime) eyesClosedStartTime = Date.now();
-                    
-                    statusText.innerText = "🚨 EYES CLOSED! WAKE UP!";
-                    statusText.classList.add('alarm');
-                    if (alarmSound.paused) alarmSound.play();
-
-                    // Check for 3-second email trigger
                     const duration = Date.now() - eyesClosedStartTime;
-                    if (duration > TIME_BEFORE_EMAIL && !isEmailSent) {
-                        sendEmergencyEmail();
-                        isEmailSent = true;
+
+                    // Creative Visuals
+                    emojiDisp.innerText = "😴";
+                    statusText.innerText = "EYES CLOSED";
+                    statusText.classList.add('danger-text');
+                    cameraFrame.classList.add('danger');
+
+                    // Audio Logic
+                    if (duration > 1000 && duration < CRITICAL_TIME) {
+                        if (shortBeep.paused) shortBeep.play();
+                    } else if (duration >= CRITICAL_TIME) {
+                        emojiDisp.innerText = "🚨";
+                        statusText.innerText = "PLEASE WAKE UP!";
+                        if (criticalAlarm.paused) criticalAlarm.play();
+                        if (!isEmailSent) {
+                            sendEmail();
+                            isEmailSent = true;
+                        }
                     }
                 } else {
-                    // EYES OPEN
                     eyesClosedStartTime = null;
                     isEmailSent = false;
-                    statusText.innerText = "SYSTEM: MONITORING";
-                    statusText.classList.remove('alarm');
-                    alarmSound.pause();
-                    alarmSound.currentTime = 0;
+                    emojiDisp.innerText = "😊";
+                    statusText.innerText = "MONITORING";
+                    statusText.classList.remove('danger-text');
+                    cameraFrame.classList.remove('danger');
+                    criticalAlarm.pause();
+                    criticalAlarm.currentTime = 0;
                 }
-
-                // Draw Eye Dots for confirmation
-                drawEyes(landmarks);
+                drawTracking(landmarks);
             }
         }
 
-        function drawEyes(landmarks) {
-            const indices = [33, 133, 160, 153, 158, 144, 362, 263, 385, 373, 387, 380];
-            canvasCtx.fillStyle = statusText.classList.contains('alarm') ? "red" : "lime";
-            indices.forEach(i => {
+        function drawTracking(landmarks) {
+            const pts = [33, 133, 160, 153, 362, 263, 385, 373];
+            canvasCtx.fillStyle = eyesClosedStartTime ? "red" : "#32ff7e";
+            pts.forEach(i => {
                 const p = landmarks[i];
                 canvasCtx.beginPath();
                 canvasCtx.arc(p.x * canvasElement.width, p.y * canvasElement.height, 2, 0, 2*Math.PI);
@@ -156,26 +176,22 @@
             });
         }
 
-        function sendEmergencyEmail() {
+        function sendEmail() {
             emailjs.send('service_i0v4u5c', 'template_i0kie3b', {
                 to_email: "harshareddy4489@gmail.com",
-                otp: "ALERT: PLEASE AWAKE! Drowsiness detected for over 3 seconds."
-            }).then(() => console.log("Alert Email Sent!"));
+                otp: "URGENT: Drowsiness detected for over 5 seconds. Driver may be asleep!"
+            });
         }
 
         async function init() {
-            camera = new Camera(video, {
+            const cam = new Camera(video, {
                 onFrame: async () => { await faceMesh.send({image: video}); },
                 width: 640, height: 480
             });
-            camera.start();
+            cam.start();
         }
 
-        function logout() {
-            localStorage.removeItem("isLoggedIn");
-            window.location.href = "index.html";
-        }
-
+        function logout() { localStorage.removeItem("isLoggedIn"); window.location.href = "index.html"; }
         window.onload = init;
     </script>
 </body>
