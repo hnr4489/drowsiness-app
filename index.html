@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Login - Drowsiness Detector</title>
+    <title>Login - Drowsiness Detector</title>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script>
         (function() { emailjs.init("OZNLclrooFqNEEqWR"); })();
@@ -11,8 +11,9 @@
     <style>
         body { background: #0f0f1a; color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .login-box { background: #1a1a2e; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 340px; border: 1px solid #333; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #252545; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #32ff7e; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #252545; color: white; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 12px; background: #32ff7e; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 1rem; transition: 0.3s; }
+        button:hover { background: #28cc64; }
         #status-msg { margin-top: 15px; font-size: 0.85rem; color: #32ff7e; display: none; }
     </style>
 </head>
@@ -24,7 +25,7 @@
             <button onclick="sendOTP()" id="send-btn">Send OTP</button>
         </div>
         <div id="otp-section" style="display:none;">
-            <p style="font-size: 0.8rem; color: #aaa;">Check your inbox for the code.</p>
+            <p style="font-size: 0.8rem; color: #aaa;">Enter the 6-digit code sent to your inbox.</p>
             <input type="text" id="otp-input" placeholder="6-digit Code" maxlength="6">
             <button onclick="verifyOTP()">Verify & Start</button>
         </div>
@@ -49,11 +50,10 @@
             }).then(() => {
                 document.getElementById("email-section").style.display = "none";
                 document.getElementById("otp-section").style.display = "block";
-                const msg = document.getElementById("status-msg");
-                msg.innerText = "OTP sent to your email!";
-                msg.style.display = "block";
+                document.getElementById("status-msg").innerText = "OTP sent successfully!";
+                document.getElementById("status-msg").style.display = "block";
             }).catch(err => {
-                alert("Email failed to send. Check EmailJS settings.");
+                alert("Failed to send. Check your EmailJS configuration.");
                 btn.disabled = false;
                 btn.innerText = "Send OTP";
             });
@@ -62,7 +62,6 @@
         function verifyOTP() {
             const entered = document.getElementById("otp-input").value;
             if (entered === generatedOTP && generatedOTP !== "") {
-                // Using sessionStorage to avoid persistent loops
                 sessionStorage.setItem("DASHCAM_AUTH_STATUS", "PERMITTED");
                 window.location.replace("app.html");
             } else {
