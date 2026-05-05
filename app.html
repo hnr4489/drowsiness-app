@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drowsiness Detector Pro</title>
     
-    <!-- Security Check (MUST BE FIRST) -->
+    <!-- Security Check -->
     <script>
         if (sessionStorage.getItem("DASHCAM_AUTH_STATUS") !== "PERMITTED") {
             window.location.replace("index.html");
@@ -18,102 +18,148 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <style>
-        :root { --neon-lime: #32ff7e; --neon-red: #ff4d4d; }
-        body { background: #0f0f1a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .dashboard { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border-radius: 20px; padding: 20px; width: 100%; max-width: 600px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
-        .camera-view { position: relative; border-radius: 15px; overflow: hidden; border: 2px solid var(--neon-lime); background: #000; margin-top: 15px; }
-        .camera-view.danger { border-color: var(--neon-red); box-shadow: 0 0 20px var(--neon-red); }
-        video { width: 100%; display: block; }
+        :root { --neon-lime: #32ff7e; --neon-red: #ff4d4d; --glass: rgba(255, 255, 255, 0.1); }
+        body { background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow-x: hidden; }
+        .dashboard { background: var(--glass); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 25px; width: 100%; max-width: 600px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); box-sizing: border-box; text-align: center; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .main-view { position: relative; border-radius: 15px; overflow: hidden; border: 2px solid var(--neon-lime); background: #000; width: 100%; min-height: 240px; transition: 0.4s; }
+        .main-view.danger { border-color: var(--neon-red); box-shadow: 0 0 30px var(--neon-red); }
+        video { width: 100%; height: auto; display: block; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .status { font-size: 1.2rem; font-weight: bold; color: var(--neon-lime); margin-top: 15px; text-transform: uppercase; }
-        .status.blink { animation: blinker 0.6s infinite; color: var(--neon-red); }
-        @keyframes blinker { 50% { opacity: 0; } }
-        button { background: none; border: 1px solid cyan; color: cyan; padding: 8px 15px; border-radius: 8px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+        .reaction-emoji { position: absolute; top: 10px; right: 10px; font-size: 2.5rem; background: rgba(0,0,0,0.6); border-radius: 50%; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; z-index: 10; }
+        .status-text { font-size: 1.2rem; font-weight: bold; color: var(--neon-lime); text-transform: uppercase; }
+        .danger-text { color: var(--neon-red) !important; animation: blink 0.6s infinite; }
+        button { background: none; border: 1px solid cyan; color: cyan; padding: 10px 15px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: cyan; color: black; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
     </style>
 </head>
 <body>
 
     <div class="dashboard">
-        <div style="display:flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin:0;">DROWSINESS DETECTOR</h3>
-            <button onclick="logout()" style="border-color:#ff4d4d; color:#ff4d4d;">LOGOUT</button>
+        <div class="header">
+            <h3 style="margin:0;">DROWSINESS <span style="color:cyan">DETECTOR</span></h3>
+            <div style="display:flex; gap:10px;">
+                <button onclick="togglePiP()">🔲 PiP</button>
+                <button onclick="logout()" style="border-color:var(--neon-red); color:var(--neon-red);">LOGOUT</button>
+            </div>
         </div>
 
-        <div class="camera-view" id="camera-frame">
+        <div class="main-view" id="camera-frame">
             <video id="webcam" autoplay muted playsinline></video>
             <canvas id="output_canvas"></canvas>
+            <div class="reaction-emoji" id="emoji-display">🟢</div>
         </div>
 
-        <div id="status-text" class="status">SYSTEM ACTIVE</div>
-        <div id="ear-val" style="color:#888; font-size: 0.8rem; margin-top: 5px;">EAR: 0.000</div>
-        
-        <button onclick="video.requestPictureInPicture()" style="margin-top:20px;">🔲 START BACKGROUND MODE</button>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
+            <div style="background:rgba(0,0,0,0.4); padding:15px; border-radius:15px;">
+                <div style="font-size:0.75rem; color:#aaa; margin-bottom:5px;">STATUS</div>
+                <div id="status-text" class="status-text">MONITORING</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:15px; border-radius:15px;">
+                <div style="font-size:0.75rem; color:#aaa; margin-bottom:5px;">EAR SCORE</div>
+                <div id="ear-val" style="font-size:1.3rem; font-weight:bold; color:cyan;">0.000</div>
+            </div>
+        </div>
     </div>
 
-    <!-- Alarm Files -->
-    <audio id="short-beep"><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
-    <audio id="long-alarm" loop><source src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
+    <!-- Alarm Audio -->
+    <audio id="critical-alarm" loop><source src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3" type="audio/mpeg"></audio>
 
     <script>
         const video = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
         const statusText = document.getElementById('status-text');
-        const earDisplay = document.getElementById('ear-val');
-        const shortBeep = document.getElementById('short-beep');
-        const longAlarm = document.getElementById('long-alarm');
-        const frame = document.getElementById('camera-frame');
+        const earVal = document.getElementById('ear-val');
+        const emojiDisp = document.getElementById('emoji-display');
+        const cameraFrame = document.getElementById('camera-frame');
+        const criticalAlarm = document.getElementById('critical-alarm');
 
-        let eyesClosedTime = null;
-        let emailSent = false;
+        const EAR_THRESHOLD = 0.18; 
+        const CRITICAL_TIME = 10000; // Exact 10 seconds
+        let eyesClosedStartTime = null;
+        let isEmailSent = false;
         let audioCtx = null;
 
+        const initAudio = () => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        };
+
+        async function togglePiP() {
+            try { await video.requestPictureInPicture(); } catch (e) { alert("Camera not ready."); }
+        }
+
         const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         faceMesh.onResults(onResults);
 
         function getEAR(landmarks, i) {
-            const v = Math.hypot(landmarks[i[1]].x - landmarks[i[5]].x, landmarks[i[1]].y - landmarks[i[5]].y);
+            const v1 = Math.hypot(landmarks[i[1]].x - landmarks[i[5]].x, landmarks[i[1]].y - landmarks[i[5]].y);
+            const v2 = Math.hypot(landmarks[i[2]].x - landmarks[i[4]].x, landmarks[i[2]].y - landmarks[i[4]].y);
             const h = Math.hypot(landmarks[i[0]].x - landmarks[i[3]].x, landmarks[i[0]].y - landmarks[i[3]].y);
-            return v / h;
+            return (v1 + v2) / (2.0 * h);
         }
 
         function onResults(results) {
+            canvasElement.width = video.videoWidth;
+            canvasElement.height = video.videoHeight;
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
-                const ear = (getEAR(landmarks, [33, 160, 158, 133, 153, 144]) + getEAR(landmarks, [362, 385, 387, 263, 373, 380])) / 2;
-                earDisplay.innerText = `EAR: ${ear.toFixed(3)}`;
+                const avgEAR = (getEAR(landmarks, [33, 160, 158, 133, 153, 144]) + getEAR(landmarks, [362, 385, 387, 263, 373, 380])) / 2;
+                earVal.innerText = avgEAR.toFixed(3);
 
-                if (ear < 0.18) {
-                    if (!eyesClosedTime) eyesClosedTime = Date.now();
-                    const duration = Date.now() - eyesClosedTime;
+                if (avgEAR < EAR_THRESHOLD) {
+                    if (!eyesClosedStartTime) eyesClosedStartTime = Date.now();
+                    const duration = Date.now() - eyesClosedStartTime;
 
-                    statusText.innerText = "⚠️ EYES CLOSED!";
-                    statusText.classList.add('blink');
-                    frame.classList.add('danger');
+                    emojiDisp.innerText = "😴";
+                    statusText.innerText = "EYES CLOSED";
+                    cameraFrame.classList.add('danger');
 
-                    if (duration > 1000 && duration < 10000) shortBeep.play().catch(()=>{});
-                    if (duration >= 10000) {
-                        longAlarm.play().catch(()=>{});
-                        if (!emailSent) {
-                            emailjs.send('service_i0v4u5c', 'template_i0kie3b', { to_email: "harshareddy4489@gmail.com", otp: "CRITICAL: Eyes closed for 10 seconds!" });
-                            emailSent = true;
+                    // TRIGGER ONLY AFTER 10 SECONDS
+                    if (duration >= CRITICAL_TIME) {
+                        emojiDisp.innerText = "🚨";
+                        statusText.innerText = "WAKE UP!";
+                        statusText.classList.add('danger-text');
+                        if (criticalAlarm.paused) criticalAlarm.play().catch(()=>{});
+                        
+                        if (!isEmailSent) {
+                            sendEmail();
+                            isEmailSent = true;
                         }
                     }
                 } else {
-                    eyesClosedTime = null; emailSent = false;
-                    statusText.innerText = "SYSTEM ACTIVE";
-                    statusText.classList.remove('blink');
-                    frame.classList.remove('danger');
-                    longAlarm.pause(); longAlarm.currentTime = 0;
+                    resetSystem();
                 }
             }
         }
 
-        async function init() {
-            window.addEventListener('click', () => { 
-                if(!audioCtx) audioCtx = new AudioContext();
-                shortBeep.play().then(() => { shortBeep.pause(); });
-            }, {once: true});
+        function resetSystem() {
+            eyesClosedStartTime = null;
+            isEmailSent = false;
+            emojiDisp.innerText = "😊";
+            statusText.innerText = "MONITORING";
+            statusText.classList.remove('danger-text');
+            cameraFrame.classList.remove('danger');
+            criticalAlarm.pause();
+            criticalAlarm.currentTime = 0;
+        }
 
+        function sendEmail() {
+            emailjs.send('service_i0v4u5c', 'template_i0kie3b', {
+                to_email: "harshareddy4489@gmail.com",
+                otp: "ALERT: Driver eyes closed for 10 consecutive seconds!"
+            });
+        }
+
+        async function init() {
+            window.addEventListener('touchstart', initAudio, { once: true });
+            window.addEventListener('click', initAudio, { once: true });
+            
             const cam = new Camera(video, {
                 onFrame: async () => { await faceMesh.send({image: video}); },
                 width: 640, height: 480
