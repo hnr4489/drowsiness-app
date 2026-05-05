@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Dashcam - Monitoring</title>
     
-    <!-- Existing EmailJS -->
+    <!-- EmailJS SDK -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
         (function() {
@@ -13,26 +13,18 @@
         })();
     </script>
     
-    <!-- New: MediaPipe Face Mesh for AI Detection -->
+    <!-- MediaPipe Face Mesh AI Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
     <style>
         body { background-color: #0f111a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        
-        /* Modified: Added position relative for AI landmarks */
         .camera-container { width: 100%; max-width: 800px; aspect-ratio: 4/3; background: black; border: 3px solid lime; border-radius: 15px; overflow: hidden; position: relative; }
-        
         video { width: 100%; height: 100%; object-fit: cover; }
-        
-        /* New: Canvas overlay for AI tracking visualization */
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-
         .controls { margin-top: 20px; width: 100%; max-width: 400px; background: #1e2126; padding: 20px; border-radius: 10px; text-align: center; }
         .status { color: lime; font-weight: bold; margin-bottom: 10px; display: block; font-size: 1.2rem; }
-        
-        /* New: Alarm status styling */
         .status.alarm { color: #ff4c4c; animation: blinker 1s linear infinite; }
         @keyframes blinker { 50% { opacity: 0; } }
     </style>
@@ -41,28 +33,26 @@
 
     <div class="header">
         <h2>🚗 AI Dashcam Monitor</h2>
-        <!-- Auth check in Logout script -->
         <button onclick="logout()" style="background:none; border:1px solid #444; color:white; padding:5px 10px; border-radius:5px; cursor:pointer;">Logout</button>
     </div>
 
     <div class="camera-container">
         <video id="webcam" autoplay muted playsinline></video>
-        <!-- AI output drawn here -->
         <canvas id="output_canvas"></canvas> 
     </div>
 
     <div class="controls">
-        <span class="status" id="status-text">SYSTEM: INITIALIZING...</span>
-        <p style="color: #aaa; font-size: 0.8rem;">An alarm will sound immediately upon eye closure. If closed for 3+ seconds, an email will be sent.</p>
+        <span class="status" id="status-text">SYSTEM: INITIALIZING AI...</span>
+        <div id="ear-debug" style="font-family: monospace; color: #888; font-size: 0.8rem;">EAR: 0.00</div>
     </div>
 
-    <!-- Alarm Sound (Basic Beep) -->
+    <!-- Alarm Sound -->
     <audio id="alarm-sound" loop>
         <source src="https://cdn.pixabay.com/audio/2022/03/19/audio_107038e211.mp3" type="audio/mpeg">
     </audio>
 
     <script>
-        // --- 1. Auth & Global Settings ---
+        // --- 1. Auth Guard ---
         if (localStorage.getItem("isLoggedIn") !== "true") {
             window.location.href = "index.html";
         }
@@ -72,192 +62,121 @@
         const canvasCtx = canvasElement.getContext('2d');
         const statusText = document.getElementById('status-text');
         const alarmSound = document.getElementById('alarm-sound');
+        const earDisplay = document.getElementById('ear-debug');
 
-        // Threshold for Drowsiness (EAR: Eye Aspect Ratio)
-        // Adjust these if detection is too sensitive (higher number) or slow (lower number)
-        const EAR_THRESHOLD = 0.22; 
-        const TIME_BEFORE_EMAIL_SECONDS = 3;
-
-        let eyesClosedCounter = 0; // Tracks consecutive frames with eyes closed
-        let isEmailSentSession = false; // Prevents sending multiple emails in one closure event
+        // --- 2. Calibration Settings ---
+        const EAR_THRESHOLD = 0.18; // Lowered to avoid false positives
+        const TIME_BEFORE_EMAIL = 3000; // 3 seconds in milliseconds
+        
+        let eyesClosedStartTime = null;
+        let isEmailSent = false;
         let camera = null;
 
-        // --- 2. MediaPipe Face Mesh Setup (The AI Part) ---
+        // --- 3. MediaPipe Setup ---
         const faceMesh = new FaceMesh({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
         }});
 
         faceMesh.setOptions({
             maxNumFaces: 1,
-            refineLandmarks: true, // Needed for precise eye tracking
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
         });
 
-        // This runs every time the AI processes a camera frame
         faceMesh.onResults(onResults);
 
-        // --- 3. Drowsiness Logic ---
-        function onResults(results) {
-            // Set canvas size to match video
-            if (canvasElement.width !== video.videoWidth) {
-                canvasElement.width = video.videoWidth;
-                canvasElement.height = video.videoHeight;
-            }
+        function getEAR(landmarks, indices) {
+            const p1 = landmarks[indices[0]]; // Left Corner
+            const p2 = landmarks[indices[1]]; // Top 1
+            const p3 = landmarks[indices[2]]; // Top 2
+            const p4 = landmarks[indices[3]]; // Right Corner
+            const p5 = landmarks[indices[4]]; // Bottom 1
+            const p6 = landmarks[indices[5]]; // Bottom 2
 
-            canvasCtx.save();
+            const v1 = Math.hypot(p2.x - p6.x, p2.y - p6.y);
+            const v2 = Math.hypot(p3.x - p5.x, p3.y - p5.y);
+            const h = Math.hypot(p1.x - p4.x, p1.y - p4.y);
+
+            return (v1 + v2) / (2.0 * h);
+        }
+
+        function onResults(results) {
+            canvasElement.width = video.videoWidth;
+            canvasElement.height = video.videoHeight;
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
+                
+                // Detailed landmark indices for eyes
+                const earL = getEAR(landmarks, [33, 160, 158, 133, 153, 144]);
+                const earR = getEAR(landmarks, [362, 385, 387, 263, 373, 380]);
+                const avgEAR = (earL + earR) / 2;
 
-                // --- 3a. Calculate Eye Closure (EAR) ---
-                // We use specific landmark IDs for left and right eyes
-                const earLeft = getEAR(landmarks, [33, 160, 158, 133, 153, 144]);
-                const earRight = getEAR(landmarks, [362, 385, 387, 263, 373, 380]);
-                const averageEAR = (earLeft + earRight) / 2;
+                earDisplay.innerText = `EAR: ${avgEAR.toFixed(3)}`;
 
-                // --- 3b. Action Logic ---
-                if (averageEAR < EAR_THRESHOLD) {
-                    // EYES ARE CLOSED
-                    eyesClosedCounter++;
-
-                    // A: Visual Status Change
+                if (avgEAR < EAR_THRESHOLD) {
+                    // EYES CLOSED
+                    if (!eyesClosedStartTime) eyesClosedStartTime = Date.now();
+                    
                     statusText.innerText = "🚨 EYES CLOSED! WAKE UP!";
                     statusText.classList.add('alarm');
+                    if (alarmSound.paused) alarmSound.play();
 
-                    // B: Play Alarm Instantly
-                    if (alarmSound.paused) {
-                        alarmSound.play().catch(e => console.log("Audio block: user interaction needed first."));
-                    }
-
-                    // C: Email Logic (if closed for 3 seconds)
-                    // Assuming roughly 30 frames per second
-                    if (eyesClosedCounter > (30 * TIME_BEFORE_EMAIL_SECONDS) && !isEmailSentSession) {
+                    // Check for 3-second email trigger
+                    const duration = Date.now() - eyesClosedStartTime;
+                    if (duration > TIME_BEFORE_EMAIL && !isEmailSent) {
                         sendEmergencyEmail();
-                        isEmailSentSession = true; // Prevents sending many emails per single closure
+                        isEmailSent = true;
                     }
                 } else {
-                    // EYES ARE OPEN
-                    eyesClosedCounter = 0;
-                    isEmailSentSession = false; // Reset email trigger
-
-                    // Normal Status
+                    // EYES OPEN
+                    eyesClosedStartTime = null;
+                    isEmailSent = false;
                     statusText.innerText = "SYSTEM: MONITORING";
                     statusText.classList.remove('alarm');
-
-                    // Stop Alarm
-                    if (!alarmSound.paused) {
-                        alarmSound.pause();
-                        alarmSound.currentTime = 0; // Reset sound to start
-                    }
+                    alarmSound.pause();
+                    alarmSound.currentTime = 0;
                 }
 
-                // (Optional) Visual Help: Draw only eye landmarks to verify tracking
-                drawEyeTracking(landmarks);
-
-            } else {
-                // No face detected
-                statusText.innerText = "SYSTEM: NO FACE DETECTED";
-                statusText.classList.remove('alarm');
-                alarmSound.pause();
+                // Draw Eye Dots for confirmation
+                drawEyes(landmarks);
             }
-            canvasCtx.restore();
         }
 
-        // --- 4. Mathematical Helper Functions (EAR) ---
-        function getEAR(landmarks, eyeIndices) {
-            const p1 = landmarks[eyeIndices[0]];
-            const p2 = landmarks[eyeIndices[1]];
-            const p3 = landmarks[eyeIndices[2]];
-            const p4 = landmarks[eyeIndices[3]];
-            const p5 = landmarks[eyeIndices[4]];
-            const p6 = landmarks[eyeIndices[5]];
-
-            // Distance between vertical eye landmarks
-            const v1 = Math.sqrt(Math.pow(p2.x - p6.x, 2) + Math.pow(p2.y - p6.y, 2));
-            const v2 = Math.sqrt(Math.pow(p3.x - p5.x, 2) + Math.pow(p3.y - p5.y, 2));
-
-            // Distance between horizontal eye landmark
-            const h = Math.sqrt(Math.pow(p1.x - p4.x, 2) + Math.pow(p1.y - p4.y, 2));
-
-            // Eye Aspect Ratio Formula
-            return (v1 + v2) / (2.0 * h);
-        }
-
-        // --- 5. Alerts & Audio ---
-        function sendEmergencyEmail() {
-            // Update status text so user knows email is going out
-            statusText.innerText = "🚨🚨 DROWSINESS DETECTED: SENDING EMAIL ALERT!";
-            statusText.style.color = "orange";
-            console.log("Drowsiness threshold reached. Attempting to send email...");
-
-            const templateParams = {
-                to_email: "harshareddy4489@gmail.com", // Change as needed
-                otp: "ALERT: PLEASE AWAKE! Critical drowsiness detected." // repurposed otp field
-            };
-
-            emailjs.send('service_i0v4u5c', 'template_i0kie3b', templateParams)
-                .then(() => {
-                    console.log("Emergency Email Sent Successfully!");
-                    // Reset visual status slightly so user knows it went through
-                    statusText.style.color = "#ff4c4c"; 
-                    statusText.innerText = "🚨 EYES CLOSED! WAKE UP! (Email Sent)";
-                })
-                .catch((err) => {
-                    console.error("Email failed:", err);
-                });
-        }
-
-        // Optional: Simple eye visualization to know the AI works
-        function drawEyeTracking(landmarks) {
-             const eyeIndices = [33, 160, 158, 133, 153, 144, 362, 385, 387, 263, 373, 380];
-             for(let i = 0; i < eyeIndices.length; i++) {
-                const landmark = landmarks[eyeIndices[i]];
+        function drawEyes(landmarks) {
+            const indices = [33, 133, 160, 153, 158, 144, 362, 263, 385, 373, 387, 380];
+            canvasCtx.fillStyle = statusText.classList.contains('alarm') ? "red" : "lime";
+            indices.forEach(i => {
+                const p = landmarks[i];
                 canvasCtx.beginPath();
-                canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 2, 0, 2 * Math.PI);
-                canvasCtx.fillStyle = EAR_THRESHOLD > 0.22 ? 'lime' : 'red'; // Basic indicator
+                canvasCtx.arc(p.x * canvasElement.width, p.y * canvasElement.height, 2, 0, 2*Math.PI);
                 canvasCtx.fill();
-             }
+            });
         }
 
-        // --- 6. Initialization ---
-        async function initAIAndCamera() {
-            try {
-                // Pre-warm the sound to bypass autoplay blockers
-                alarmSound.load(); 
+        function sendEmergencyEmail() {
+            emailjs.send('service_i0v4u5c', 'template_i0kie3b', {
+                to_email: "harshareddy4489@gmail.com",
+                otp: "ALERT: PLEASE AWAKE! Drowsiness detected for over 3 seconds."
+            }).then(() => console.log("Alert Email Sent!"));
+        }
 
-                statusText.innerText = "SYSTEM: STARTING AI CAMERA...";
-                
-                // Initialize MediaPipe camera wrapper
-                camera = new Camera(video, {
-                    onFrame: async () => {
-                        await faceMesh.send({image: video});
-                    },
-                    width: 1280,
-                    height: 720
-                });
-                
-                await camera.start();
-                statusText.innerText = "SYSTEM: ACTIVE - CALIBRATING...";
-                statusText.style.color = "lime";
-
-            } catch (err) {
-                statusText.innerText = "SYSTEM: ERROR";
-                statusText.style.color = "red";
-                alert("Fatal error connecting to camera or AI library. Make sure you use http://localhost.");
-                console.error(err);
-            }
+        async function init() {
+            camera = new Camera(video, {
+                onFrame: async () => { await faceMesh.send({image: video}); },
+                width: 640, height: 480
+            });
+            camera.start();
         }
 
         function logout() {
-            if(camera) camera.stop();
             localStorage.removeItem("isLoggedIn");
             window.location.href = "index.html";
         }
 
-        // Start everything on page load
-        window.onload = initAIAndCamera;
+        window.onload = init;
     </script>
 </body>
 </html>
